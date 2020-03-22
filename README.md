@@ -1,5 +1,5 @@
 # xVpn
-作者：jxt-110@qq.com
+作者：callme_friend@163.com
 
 
 00 简介
