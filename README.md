@@ -17,7 +17,7 @@ For Ubuntu-16.04：
 02 编译
 进入源码根目录：
 	make
-清楚编译：
+清除编译：
 	make clean
 
 
