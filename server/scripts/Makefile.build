@@ -1,0 +1,196 @@
+# ==========================================================================
+# Building
+# ==========================================================================
+#
+# SPDX-License-Identifier:	GPL-2.0
+#
+
+# Modified for xvpn
+src := $(obj)
+
+PHONY := __build
+__build:
+
+# Init all relevant variables used in kbuild files so
+# 1) they have correct type
+# 2) they do not inherit any value from the environment
+obj-y :=
+lib-y :=
+lib-m :=
+always :=
+targets :=
+subdir-y :=
+subdir-m :=
+EXTRA_AFLAGS   :=
+EXTRA_CFLAGS   :=
+EXTRA_CPPFLAGS :=
+EXTRA_LDFLAGS  :=
+asflags-y  :=
+ccflags-y  :=
+cppflags-y :=
+ldflags-y  :=
+
+subdir-asflags-y :=
+subdir-ccflags-y :=
+
+DEPS :=
+
+include scripts/Kbuild.include
+
+# For backward compatibility check that these variables do not change
+save-cflags := $(CFLAGS)
+
+# The filename Kbuild has precedence over Makefile
+kbuild-dir := $(src)
+kbuild-file := $(kbuild-dir)/Makefile
+include $(kbuild-file)
+
+# create clean target
+
+# Added for U-Boot
+asflags-y  += $(PLATFORM_CPPFLAGS)
+ccflags-y  += $(PLATFORM_CPPFLAGS)
+cppflags-y += $(PLATFORM_CPPFLAGS)
+
+include scripts/Makefile.lib
+
+ifneq ("$(INCLUDE_DIRS)", "")
+INCLUDE_DIRS := $(strip $(INCLUDE_DIRS))
+INCLUDE_DIRS := $(addprefix -I, $(INCLUDE_DIRS))
+endif
+
+
+DEPS  = $(obj-y:.o=.dep)				# lib1/func1.dep
+DEPS := $(filter-out %built-in.dep, $(DEPS))
+
+ifneq ($(MAKECMDGOALS), clean)
+include $(DEPS)					# lib1/func1.dep
+endif
+
+
+# ===========================================================================
+
+ifneq ($(strip $(lib-y) $(lib-m) $(lib-)),)
+lib-target := $(obj)/lib.a
+endif
+
+ifneq ($(strip $(obj-y) $(obj-) $(subdir-m) $(lib-target)),)
+builtin-target := $(obj)/built-in.o
+endif
+
+# We keep a list of all modules in $(MODVERDIR)
+
+__build: $(builtin-target) $(lib-target) $(extra-y) $(subdir-ym) $(always)
+	@:
+
+# Compile C sources (.c)
+# ---------------------------------------------------------------------------
+
+
+# Built-in and composite module parts
+$(obj)/%.o: $(src)/%.c FORCE
+	$(CC) $(INCLUDE_DIRS) -c $< -o $@ 
+	@echo "create $@ in $$(obj)/%.o target"
+
+# Compile assembler sources (.S)
+# ---------------------------------------------------------------------------
+
+quiet_cmd_as_o_S = AS $(quiet_modtag)  $@
+cmd_as_o_S       = $(CC) $(a_flags) -c -o $@ $<
+
+$(obj)/%.o: $(src)/%.S FORCE
+	$(CC) $(INCLUDE_DIRS) -c -o $@ $<
+
+
+# To build objects in subdirs, we need to descend into the directories
+$(sort $(subdir-obj-y)): $(subdir-ym) ;
+
+#
+# Rule to compile a set of .o files into one .o file
+#
+ifdef builtin-target
+quiet_cmd_link_o_target = LD      $@
+# If the list of objects to link is empty, just create an empty built-in.o
+cmd_link_o_target = $(if $(strip $(obj-y)),\
+		      $(LD) $(ld_flags) -r -o $@ $(filter $(obj-y), $^) \
+		      $(cmd_secanalysis),\
+		      rm -f $@; $(AR) rcs$(KBUILD_ARFLAGS) $@)
+
+$(builtin-target): $(obj-y) FORCE
+	$(LD) -r $(obj-y) -o $@
+
+endif # builtin-target
+
+
+ifdef lib-target
+quiet_cmd_link_l_target = AR      $@
+cmd_link_l_target = rm -f $@; $(AR) rcs$(KBUILD_ARFLAGS) $@ $(lib-y)
+
+$(lib-target): $(lib-y) FORCE
+#	$(call if_changed,link_l_target)
+	$(AR) rcs $@ $(lib-y)
+
+targets += $(lib-target)
+endif
+
+
+# To build objects in subdirs, we need to descend into the directories
+$(sort $(subdir-obj-y)): $(subdir-ym) ;
+
+
+# Descending
+# ---------------------------------------------------------------------------
+
+PHONY += $(subdir-ym)
+$(subdir-ym):
+	$(MAKE) $(build)=$@
+
+# Add FORCE to the prequisites of a target to force it to be always rebuilt.
+# ---------------------------------------------------------------------------
+
+PHONY += FORCE
+
+FORCE:
+
+# Read all saved command lines and dependencies for the $(targets) we
+# may be building above, using $(if_changed{,_dep}). As an
+# optimization, we don't need to read them if the target does not
+# exist, we will rebuild anyway in that case.
+
+targets := $(wildcard $(sort $(targets)))
+
+# Declare the contents of the .PHONY variable as phony.  We keep that
+# information in a variable se we can use it in if_changed and friends.
+
+PHONY += clean
+
+# obj-y = lib2/func2.o lib2/sub-func/built-in.o
+CLEAN_OBJ  = $(filter-out %built-in.o, $(obj-y))
+						
+# lib2/func2.dep
+#CLEAN_OBJ += $(patsubst  $(obj)/%.o, $(obj)/%.dep, $(filter-out %built-in.o, $(obj-y)) )
+	
+# lib2/built-in.o lib2/sub-func/built-in.o
+#CLEAN_OBJ += $(builtin-target) $(lib-target) $(extra-y) $(subdir-ym) $(always)			
+
+sub-clean:
+	rm -fr $(CLEAN_OBJ)
+
+#
+# mkdir target.
+# added by xtjin
+#
+
+$(obj)/%.dep: $(src)/%.c
+	@echo "Creating $@ ..."
+	@set -e ; \
+	$(RM) $(RMFLAGS) $@.tmp ; \
+	$(CC) $(INCLUDE_DIRS) -E -MM $(filter %.c, $^) > $@.tmp ; \
+	sed 's,\(.*\)\.o[ :]*,objs/\1.o $@: ,g' < $@.tmp > $@ ; \
+	$(RM) $(RMFLAGS) $@.tmp
+	@echo ""
+	@echo ":-) Completed"
+	@echo ""
+
+.PHONY: $(PHONY)
+

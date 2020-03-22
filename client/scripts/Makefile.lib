@@ -1,0 +1,60 @@
+#
+# SPDX-License-Identifier:	GPL-2.0
+#
+
+# Figure out what we need to build from the various variables
+# ===========================================================================
+
+# Libraries are always collected in one lib file.
+# Filter out objects already built-in
+
+lib-y := $(filter-out $(obj-y), $(sort $(lib-y) $(lib-m)))
+
+
+# Handle objects in subdirs
+# ---------------------------------------------------------------------------
+# o if we encounter foo/ in $(obj-y), replace it by foo/built-in.o
+#   and add the directory to the list of dirs to descend into: $(subdir-y)
+# o if we encounter foo/ in $(obj-m), remove it from $(obj-m)
+#   and add the directory to the list of dirs to descend into: $(subdir-m)
+
+# Determine modorder.
+# Unfortunately, we don't have information about ordering between -y
+# and -m subdirs.  Just put -y's first.
+
+__subdir-y	:= $(patsubst %/,%,$(filter %/, $(obj-y)))
+subdir-y	+= $(__subdir-y)
+__subdir-m	:= $(patsubst %/,%,$(filter %/, $(obj-m)))
+subdir-m	+= $(__subdir-m)
+obj-y		:= $(patsubst %/, %/built-in.o, $(obj-y))
+obj-m		:= $(filter-out %/, $(obj-m))
+
+# Subdirectories we need to descend into
+
+subdir-ym	:= $(sort $(subdir-y) $(subdir-m))
+
+# $(subdir-obj-y) is the list of objects in $(obj-y) which uses dir/ to
+# tell kbuild to descend
+subdir-obj-y := $(filter %/built-in.o, $(obj-y))
+
+# Add subdir path
+
+extra-y		:= $(addprefix $(obj)/,$(extra-y))
+always		:= $(addprefix $(obj)/,$(always))
+targets		:= $(addprefix $(obj)/,$(targets))
+modorder	:= $(addprefix $(obj)/,$(modorder))
+obj-y		:= $(addprefix $(obj)/,$(obj-y))
+obj-m		:= $(addprefix $(obj)/,$(obj-m))
+lib-y		:= $(addprefix $(obj)/,$(lib-y))
+subdir-obj-y	:= $(addprefix $(obj)/,$(subdir-obj-y))
+real-objs-y	:= $(addprefix $(obj)/,$(real-objs-y))
+real-objs-m	:= $(addprefix $(obj)/,$(real-objs-m))
+single-used-m	:= $(addprefix $(obj)/,$(single-used-m))
+multi-used-y	:= $(addprefix $(obj)/,$(multi-used-y))
+multi-used-m	:= $(addprefix $(obj)/,$(multi-used-m))
+multi-objs-y	:= $(addprefix $(obj)/,$(multi-objs-y))
+multi-objs-m	:= $(addprefix $(obj)/,$(multi-objs-m))
+subdir-ym	:= $(addprefix $(obj)/,$(subdir-ym))
+obj-dirs	:= $(addprefix $(obj)/,$(obj-dirs))
+
+

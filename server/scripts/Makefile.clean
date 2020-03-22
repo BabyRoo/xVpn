@@ -1,0 +1,72 @@
+# clean := -f $(srctree)/scripts/Makefile.clean obj
+# $(MAKE) $(clean)=$(patsubst _clean_%,%,$@)---> make -f $(srctree)/scripts/Makefile.clean obj=lib2
+# obj=lib2
+
+
+src := $(obj)
+
+PHONY := __clean
+__clean:
+
+include scripts/Kbuild.include
+
+# The filename Kbuild has precedence over Makefile
+kbuild-dir := $(src)
+kbuild-file := $(kbuild-dir)/Makefile
+include $(kbuild-file)							# obj-y = func2.o sub-func/
+
+# Figure out what we need to build from the various variables
+# ==========================================================================
+
+__subdir-y	:= $(patsubst %/,%,$(filter %/, $(obj-y)))		# __subdir-y = sub-func
+subdir-y	+= $(__subdir-y)					# subdir-y += sub-func
+
+# Subdirectories we need to descend into
+
+subdir-ym	:= $(sort $(subdir-y))					# subdir-ym	  = sub-func
+subdir-ymn      := $(sort $(subdir-ym))					# subdir-ymn	= sub-func
+
+# Add subdir path
+
+subdir-ymn	:= $(addprefix $(obj)/,$(subdir-ymn))			# subdir-ymn = lib2/sub-func
+
+# Temporal work-around for U-Boot
+
+subdir-ymn	:= $(foreach f, $(subdir-ymn), \
+				$(if $(wildcard $(srctree)/$f/Makefile),$f))	# subdir-ymn = lib2/sub-func
+
+# build a list of files to remove, usually relative to the current
+# directory
+
+obj-files-cl := $(filter %.o, $(obj-y))			# func2.o
+obj-files-cl := $(addprefix $(obj)/, $(obj-files-cl))	# lib2/func2.o
+my__clean-files	+= $(obj-files-cl)			# my__clean-files = lib2/func2.o
+
+dep-files-cl := $(patsubst %.o, %.dep, $(obj-files-cl))	# lib2/func2.dep
+my__clean-files	+= $(dep-files-cl)			# my__clean-files = lib2/func2.o lib2/func2.dep
+
+built-in-files-cl := $(addsuffix /built-in.o, $(obj))	# lib2/built-in.o
+my__clean-files	+= $(built-in-files-cl)			# my__clean-files = lib2/func2.o lib2/func2.dep lib2/built-in.o
+
+__clean-files = $(strip $(my__clean-files))
+
+__clean: $(subdir-ymn)
+	rm -f $(__clean-files)
+
+
+# ===========================================================================
+# Generic stuff
+# ===========================================================================
+
+# Descending
+# ---------------------------------------------------------------------------
+
+PHONY += $(subdir-ymn)
+$(subdir-ymn):
+	$(Q)$(MAKE) $(clean)=$@
+
+# Declare the contents of the .PHONY variable as phony.  We keep that
+# information in a variable se we can use it in if_changed and friends.
+
+.PHONY: $(PHONY)
+
